@@ -1,0 +1,234 @@
+
+
+    <div class="form-group">
+        <label for="budget">Бюджет покупки</label>
+        <input type="range" id="budget" min="500000" max="5000000" step="50000" value="1500000">
+        <div class="range-value" id="budgetValue">$1,500,000</div>
+    </div>
+
+    <div class="form-group">
+        <label for="ownership">Тип владения</label>
+        <select id="ownership">
+            <option value="fee_simple">Fee Simple (полная собственность)</option>
+            <option value="leasehold">Leasehold (аренда земли)</option>
+        </select>
+        <div class="hint">В Гавайях ~90% земли — leasehold с ограниченным сроком</div>
+        <div class="leasehold-years" id="leaseholdYears">
+            <label for="leaseYears">Оставшихся лет аренды</label>
+            <input type="range" id="leaseYears" min="5" max="99" step="1" value="30">
+            <div class="range-value" id="leaseYearsValue">30 лет</div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="femaZone">FEMA-зона затопления</label>
+        <select id="femaZone">
+            <option value="X">X (минимальный риск)</option>
+            <option value="AE">AE (средний риск)</option>
+            <option value="VE" selected>VE (высокий риск — волновое воздействие)</option>
+        </select>
+        <div class="hint">Hanalei-Ha'ena преимущественно в зоне VE</div>
+    </div>
+
+    <div class="form-group">
+        <div class="checkbox-group">
+            <input type="checkbox" id="shortTermRental">
+            <label for="shortTermRental">Планируется краткосрочная аренда (&lt;30 дней)</label>
+        </div>
+        <div class="hint">Во многих зонах Кауаи запрещена краткосрочная аренда</div>
+    </div>
+
+    <div class="form-group">
+        <div class="checkbox-group">
+            <input type="checkbox" id="fullInsurance" checked>
+            <label for="fullInsurance">Нужно полное страховое покрытие</label>
+        </div>
+        <div class="hint">В зоне VE страховка недоступна или стоит $15K–30K/год</div>
+    </div>
+
+    <div class="form-group">
+        <div class="checkbox-group">
+            <input type="checkbox" id="termiteCheck">
+            <label for="termiteCheck">Проверка на термитов (WDO inspection)</label>
+        </div>
+    </div>
+
+    <button class="btn-calculate" id="calculateBtn">Рассчитать риски</button>
+
+    <div class="results" id="results">
+        <div class="risk-badge" id="riskBadge">
+            <div id="riskLevel">Уровень риска</div>
+            <div class="risk-score" id="riskScore">0/100</div>
+        </div>
+
+        <div class="cost-summary">
+            <h3>Скрытые расходы (Год 1)</h3>
+            <div id="costBreakdown"></div>
+            <div class="cost-row total">
+                <span class="label">ИТОГО скрытых расходов</span>
+                <span class="value" id="totalCost">$0</span>
+            </div>
+            <div class="cost-row">
+                <span class="label">% от бюджета покупки</span>
+                <span class="value" id="percentOfBudget">0%</span>
+            </div>
+        </div>
+
+        <div class="warnings" id="warningsBlock">
+            <h3>Ключевые предупреждения</h3>
+            <div id="warningsList"></div>
+        </div>
+
+        <div class="recommendations" id="recommendationsBlock">
+            <h3>Рекомендации</h3>
+            <div id="recommendationsList"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const budgetSlider = document.getElementById('budget');
+    const budgetValue = document.getElementById('budgetValue');
+    const ownershipSelect = document.getElementById('ownership');
+    const leaseholdYearsDiv = document.getElementById('leaseholdYears');
+    const leaseYearsSlider = document.getElementById('leaseYears');
+    const leaseYearsValue = document.getElementById('leaseYearsValue');
+    const calculateBtn = document.getElementById('calculateBtn');
+    const results = document.getElementById('results');
+
+    function formatMoney(num) {
+        return '$' + num.toLocaleString('en-US');
+    }
+
+    budgetSlider.addEventListener('input', () => {
+        budgetValue.textContent = formatMoney(parseInt(budgetSlider.value));
+    });
+
+    ownershipSelect.addEventListener('change', () => {
+        leaseholdYearsDiv.classList.toggle('visible', ownershipSelect.value === 'leasehold');
+    });
+
+    leaseYearsSlider.addEventListener('input', () => {
+        leaseYearsValue.textContent = leaseYearsSlider.value + ' лет';
+    });
+
+    calculateBtn.addEventListener('click', calculateRisk);
+
+    function calculateRisk() {
+        const budget = parseInt(budgetSlider.value);
+        const ownership = ownershipSelect.value;
+        const leaseYears = parseInt(leaseYearsSlider.value);
+        const femaZone = document.getElementById('femaZone').value;
+        const shortTermRental = document.getElementById('shortTermRental').checked;
+        const fullInsurance = document.getElementById('fullInsurance').checked;
+        const termiteCheck = document.getElementById('termiteCheck').checked;
+
+        let riskScore = 0;
+        let costs = [];
+        let warnings = [];
+        let recommendations = [];
+
+        if (ownership === 'leasehold') {
+            riskScore += 25;
+            costs.push({ label: 'Leasehold renegotiation / surrender fee', value: budget * 0.03 });
+            warnings.push('Leasehold: земля не ваша. При окончании срока дом переходит землевладельцу.');
+            if (leaseYears < 20) {
+                riskScore += 15;
+                warnings.push('Осталось менее 20 лет аренды — банки откажут в ипотеке, перепродажа сложна.');
+            } else if (leaseYears < 40) {
+                riskScore += 8;
+                warnings.push('Менее 40 лет — страховка и ипотека будут дороже.');
+            }
+            recommendations.push('Проверить точные условия lease agreement — есть ли право продления.');
+        } else {
+            costs.push({ label: 'Title insurance (Fee Simple)', value: budget * 0.005 });
+            recommendations.push('Fee Simple — оптимально для инвестиций и наследования.');
+        }
+
+        if (femaZone === 'X') {
+            costs.push({ label: 'Flood insurance (зона X)', value: budget * 0.002 });
+            recommendations.push('Зона X — минимальный риск затопления, страховка доступна.');
+        } else if (femaZone === 'AE') {
+            riskScore += 15;
+            costs.push({ label: 'Flood insurance (зона AE)', value: budget * 0.008 });
+            warnings.push('Зона AE: обязательное страхование от наводнений, премии растут.');
+        } else if (femaZone === 'VE') {
+            riskScore += 30;
+            costs.push({ label: 'Flood insurance (зона VE)', value: fullInsurance ? 25000 : 12000 });
+            warnings.push('Зона VE: волновое воздействие. Страховщики массово уходят с Кауаи.');
+            warnings.push('Одна дорога в район — при бедствии отрезан от мира.');
+            warnings.push('Оползни и эрозия — строительство и ремонт почти запрещены (Special Management Area).');
+            recommendations.push('Рассмотреть зону X или AE — VE может стать невыгодной через 3–5 лет.');
+        }
+
+        if (shortTermRental) {
+            riskScore += 10;
+            costs.push({ label: 'Short-term rental permit / fines risk', value: 5000 });
+            warnings.push('Краткосрочная аренда запрещена в большинстве зон Кауаи. Штрафы до $10K/день.');
+            recommendations.push('Проверить zoning ordinance конкретного участка перед покупкой.');
+        }
+
+        if (fullInsurance) {
+            costs.push({ label: 'HOA fees (Homeowners Association)', value: budget * 0.003 });
+            warnings.push('HOA может вводить скрытые сборы и ограничения на ремонт/аренду.');
+            recommendations.push('Запросить финансовые отчёты HOA за последние 3 года.');
+        }
+
+        if (termiteCheck) {
+            costs.push({ label: 'WDO inspection (термиты)', value: 600 });
+            recommendations.push('WDO inspection обязателен — термиты распространены на Гавайях.');
+        } else {
+            warnings.push('Без WDO inspection риск скрытого ущерба от термитов — $10K–50K.');
+            recommendations.push('Обязательно заказать WDO inspection перед покупкой.');
+        }
+
+        costs.push({ label: 'Property tax (Hawaii)', value: budget * 0.003 });
+        costs.push({ label: 'Closing costs (эскроу, нотариус)', value: budget * 0.015 });
+        costs.push({ label: 'Buyer agent commission (negotiable)', value: budget * 0.015 });
+        recommendations.push('С 2024 года комиссия покупателя не фиксирована — торгуйтесь или найдите flat-fee агента ($3–5K).');
+
+        const totalCost = costs.reduce((sum, c) => sum + c.value, 0);
+        const percentOfBudget = (totalCost / budget * 100).toFixed(1);
+        riskScore = Math.min(riskScore, 100);
+
+        const riskBadge = document.getElementById('riskBadge');
+        const riskLevel = document.getElementById('riskLevel');
+        const riskScoreEl = document.getElementById('riskScore');
+
+        riskBadge.className = 'risk-badge';
+        if (riskScore <= 30) {
+            riskBadge.classList.add('risk-low');
+            riskLevel.textContent = 'Низкий риск';
+        } else if (riskScore <= 60) {
+            riskBadge.classList.add('risk-medium');
+            riskLevel.textContent = 'Средний риск';
+        } else {
+            riskBadge.classList.add('risk-high');
+            riskLevel.textContent = 'Высокий риск';
+        }
+        riskScoreEl.textContent = riskScore + '/100';
+
+        document.getElementById('costBreakdown').innerHTML = costs.map(c => `
+            <div class="cost-row">
+                <span class="label">${c.label}</span>
+                <span class="value">${formatMoney(Math.round(c.value))}</span>
+            </div>
+        `).join('');
+
+        document.getElementById('totalCost').textContent = formatMoney(Math.round(totalCost));
+        document.getElementById('percentOfBudget').innerHTML = percentOfBudget + '% <span class="percent-badge">от бюджета</span>';
+
+        const warningsList = document.getElementById('warningsList');
+        if (warnings.length > 0) {
+            document.getElementById('warningsBlock').style.display = 'block';
+            warningsList.innerHTML = warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
+        } else {
+            document.getElementById('warningsBlock').style.display = 'none';
+        }
+
+        document.getElementById('recommendationsList').innerHTML = recommendations.map(r => `<div class="rec-item">${r}</div>`).join('');
+
+        results.classList.add('visible');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+</script>
